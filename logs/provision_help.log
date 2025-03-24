@@ -1,0 +1,126 @@
+usage: aca-py provision [-h] [--debug] [--arg-file ARG_FILE] [--plugin <module>] [--block-plugin <module>] [--plugin-config PLUGIN_CONFIG] [-o <KEY=VALUE> [<KEY=VALUE> ...]] [--storage-type <storage-type>]
+                        [-e <endpoint> [<endpoint> ...]] [--profile-endpoint <profile_endpoint>] [--universal-resolver [<universal_resolver_endpoint>]] [--universal-resolver-regex <did_regex> [<did_regex> ...]]
+                        [--universal-resolver-bearer-token [<universal_resolver_token>]] [--tails-server-base-url <tails-server-base-url>] [--tails-server-upload-url <tails-server-upload-url>] [--notify-revocation]
+                        [--monitor-revocation-notification] [--anoncreds-legacy-revocation {accept,reject}] [--ledger-pool-name <ledger-pool-name>] [--genesis-transactions <genesis-transactions>]
+                        [--genesis-file <genesis-file>] [--genesis-url <genesis-url>] [--no-ledger] [--read-only-ledger] [--ledger-keepalive LEDGER_KEEPALIVE] [--ledger-socks-proxy <host:port>]
+                        [--genesis-transactions-list <genesis-transactions-list>] [--accept-taa <acceptance-mechanism> <taa-version>] [--log-config <path-to-config>] [--log-file [<log-file>]] [--log-level <log-level>]
+                        [--mediator-invitation <invite URL to mediator>] [--seed <wallet-seed>] [--wallet-local-did] [--wallet-allow-insecure-seed] [--wallet-key <wallet-key>] [--wallet-rekey <wallet-rekey>]
+                        [--wallet-name <wallet-name>] [--wallet-type <wallet-type>] [--wallet-storage-type <storage-type>] [--wallet-test] [--wallet-storage-config <storage-config>]
+                        [--wallet-key-derivation-method <key-derivation-method>] [--wallet-rekey-derivation-method <rekey-derivation-method>] [--wallet-storage-creds <storage-creds>] [--replace-public-did] [--recreate-wallet]   
+
+options:
+  -h, --help            show this help message and exit
+
+Debugger:
+  --debug               Enables a remote debugging service that can be accessed using the Debug Adapter Protocol (supported by Visual Studio Code). The framework will wait for the debugger to connect at start-up. Default:       
+                        false. [env var: ACAPY_DEBUG]
+
+General:
+  --arg-file ARG_FILE   Load aca-py arguments from the specified file. Note that this file *must* be in YAML format.
+  --plugin <module>     Load <module> as external plugin module. Multiple instances of this parameter can be specified. [env var: ACAPY_PLUGIN]
+  --block-plugin <module>
+                        Block <module> plugin module from loading. Multiple instances of this parameter can be specified. [env var: ACAPY_BLOCKED_PLUGIN]
+  --plugin-config PLUGIN_CONFIG
+                        Load YAML file path that defines external plugin configuration. [env var: ACAPY_PLUGIN_CONFIG]
+  -o <KEY=VALUE> [<KEY=VALUE> ...], --plugin-config-value <KEY=VALUE> [<KEY=VALUE> ...]
+                        Set an arbitrary plugin configuration option in the format KEY=VALUE. Use dots in KEY to set deeply nested values, as in "a.b.c=value". VALUE is parsed as yaml.
+  --storage-type <storage-type>
+                        DEPRECATED: This option is ignored. Specifies the type of storage provider to use for the internal storage engine. This storage interface is used to store internal state. Supported internal storage       
+                        types are 'basic' (memory) and 'indy'. The default (if not specified) is 'indy' if the wallet type is set to 'indy', otherwise 'basic'. [env var: ACAPY_STORAGE_TYPE]
+  -e <endpoint> [<endpoint> ...], --endpoint <endpoint> [<endpoint> ...]
+                        Specifies the endpoints to put into DIDDocs to inform other agents of where they should send messages destined for this agent. Each endpoint could be one of the specified inbound transports for this      
+                        agent, or the endpoint could be that of another agent (e.g. 'https://example.com/agent-endpoint') if the routing of messages to this agent by a mediator is configured. The first endpoint specified will   
+                        be used in invitations. The endpoints are used in the formation of a connection with another agent. [env var: ACAPY_ENDPOINT]
+  --profile-endpoint <profile_endpoint>
+                        Specifies the profile endpoint for the (public) DID. [env var: ACAPY_PROFILE_ENDPOINT]
+  --universal-resolver [<universal_resolver_endpoint>]
+                        Enable resolution from a universal resolver. [env var: ACAPY_UNIVERSAL_RESOLVER]
+  --universal-resolver-regex <did_regex> [<did_regex> ...]
+                        Regex matching DIDs to resolve using the unversal resolver. Multiple can be specified. Defaults to a regex matching all DIDs resolvable by universal resolver instance. [env var:
+                        ACAPY_UNIVERSAL_RESOLVER_REGEX]
+  --universal-resolver-bearer-token [<universal_resolver_token>]
+                        Bearer token if universal resolver instance requires authentication. [env var: ACAPY_UNIVERSAL_RESOLVER_BEARER_TOKEN]
+
+Revocation:
+  --tails-server-base-url <tails-server-base-url>
+                        Sets the base url of the tails server in use. [env var: ACAPY_TAILS_SERVER_BASE_URL]
+  --tails-server-upload-url <tails-server-upload-url>
+                        Sets the base url of the tails server for upload, defaulting to the tails server base url. [env var: ACAPY_TAILS_SERVER_UPLOAD_URL]
+  --notify-revocation   Specifies that aca-py will notify credential recipients when revoking a credential it issued. [env var: ACAPY_NOTIFY_REVOCATION]
+  --monitor-revocation-notification
+                        Specifies that aca-py will emit webhooks on notification of revocation received. [env var: ACAPY_MONITOR_REVOCATION_NOTIFICATION]
+  --anoncreds-legacy-revocation {accept,reject}
+                        Specify the handling of older proofs of non-revocation for anoncreds credentials. Values are 'accept' or 'reject'. [env var: ACAPY_ANONCREDS_LEGACY_REVOCATION]
+
+Ledger:
+  --ledger-pool-name <ledger-pool-name>
+                        Specifies the name of the indy pool to be opened. This is useful if you have multiple pool configurations. [env var: ACAPY_LEDGER_POOL_NAME]
+  --genesis-transactions <genesis-transactions>
+                        Specifies the genesis transactions to use to connect to a Hyperledger Indy ledger. The transactions are provided as string of JSON e.g. '{"reqSignature":{},"txn":{"data":{"d... <snip>}}}' [env var:       
+                        ACAPY_GENESIS_TRANSACTIONS]
+  --genesis-file <genesis-file>
+                        Specifies a local file from which to read the genesis transactions. [env var: ACAPY_GENESIS_FILE]
+  --genesis-url <genesis-url>
+                        Specifies the url from which to download the genesis transactions. For example, if you are using 'von-network', the URL might be 'http://localhost:9000/genesis'. Genesis transactions URLs are available   
+                        for the Sovrin test/main networks. [env var: ACAPY_GENESIS_URL]
+  --no-ledger           Specifies that aca-py will run with no ledger configured. This must be set if running in no-ledger mode. Overrides any specified ledger or genesis configurations. Default: false. [env var:
+                        ACAPY_NO_LEDGER]
+  --read-only-ledger    Sets ledger to read-only to prevent updates. Default: false. [env var: ACAPY_READ_ONLY_LEDGER]
+  --ledger-keepalive LEDGER_KEEPALIVE
+                        Specifies how many seconds to keep the ledger open. Default: 5 [env var: ACAPY_LEDGER_KEEP_ALIVE]
+  --ledger-socks-proxy <host:port>
+                        Specifies the socks proxy (NOT http proxy) hostname and port in format 'hostname:port'. This is an optional parameter to be passed to ledger pool configuration and ZMQ in case if aca-py is running in a   
+                        corporate/private network behind a corporate proxy and will connect to the public (outside of corporate network) ledger pool [env var: ACAPY_LEDGER_SOCKS_PROXY]
+  --genesis-transactions-list <genesis-transactions-list>
+                        Load YAML configuration for connecting to multiple HyperLedger Indy ledgers. [env var: ACAPY_GENESIS_TRANSACTIONS_LIST]
+  --accept-taa <acceptance-mechanism> <taa-version>
+                        Specify the acceptance mechanism and taa version for which to accept the transaction author agreement. If not provided, the TAA must be accepted through the TTY or the admin API. [env var:
+                        ACAPY_ACCEPT_TAA]
+
+Logging:
+  --log-config <path-to-config>
+                        Specifies a custom logging configuration file [env var: ACAPY_LOG_CONFIG]
+  --log-file [<log-file>]
+                        --log-file enables writing of logs to file, if a value is provided then it uses that as log file location, otherwise the default location in log config file is used. [env var: ACAPY_LOG_FILE]
+  --log-level <log-level>
+                        Specifies a custom logging level as one of: ('debug', 'info', 'warning', 'error', 'critical') [env var: ACAPY_LOG_LEVEL]
+
+Mediation invitation:
+  --mediator-invitation <invite URL to mediator>
+                        Connect to mediator through provided invitation and send mediation request and set as default mediator. [env var: ACAPY_MEDIATION_INVITATION]
+
+Wallet:
+  --seed <wallet-seed>  Specifies the seed to use for the creation of a public DID for the agent to use with a Hyperledger Indy ledger, or a local ('--wallet-local-did') DID. If public, the DID must already exist on the
+                        ledger. [env var: ACAPY_WALLET_SEED]
+  --wallet-local-did    If this parameter is set, provisions the wallet with a local DID from the '--seed' parameter, instead of a public DID to use with a Hyperledger Indy ledger. [env var: ACAPY_WALLET_LOCAL_DID]
+  --wallet-allow-insecure-seed
+                        If this parameter is set, allows to use a custom seed to create a local DID [env var: ACAPY_WALLET_ALLOW_INSECURE_SEED]
+  --wallet-key <wallet-key>
+                        Specifies the master key value to use to open the wallet. [env var: ACAPY_WALLET_KEY]
+  --wallet-rekey <wallet-rekey>
+                        Specifies a new master key value to which to rotate and to open the wallet next time. [env var: ACAPY_WALLET_REKEY]
+  --wallet-name <wallet-name>
+                        Specifies the wallet name to be used by the agent. This is useful if your deployment has multiple wallets. [env var: ACAPY_WALLET_NAME]
+  --wallet-type <wallet-type>
+                        Specifies the type of wallet provider to use. Supported internal storage types are 'askar' and 'askar-anoncreds'.The default (if not specified) is 'askar'. [env var: ACAPY_WALLET_TYPE]
+  --wallet-storage-type <storage-type>
+                        Specifies the type of wallet backend to use. Supported internal storage types are 'default' (sqlite), and 'postgres_storage'. The default, if not specified, is 'default'. [env var:
+                        ACAPY_WALLET_STORAGE_TYPE]
+  --wallet-test         Using this option will create a wallet with an in-memory askar wallet storage with a random name. This is useful for testing purposes. The data will not be persisted after the agent is stopped. The       
+                        default is False. [env var: ACAPY_WALLET_TEST]
+  --wallet-storage-config <storage-config>
+                        Specifies the storage configuration to use for the wallet. This is required if you are for using 'postgres_storage' wallet storage type. For example, '{"url":"localhost:5432"}'. [env var:
+                        ACAPY_WALLET_STORAGE_CONFIG]
+  --wallet-key-derivation-method <key-derivation-method>
+                        Specifies the key derivation method used for wallet encryption. [env var: ACAPY_WALLET_KEY_DERIVATION_METHOD]
+  --wallet-rekey-derivation-method <rekey-derivation-method>
+                        Specifies the key derivation method used for the replacementrekey encryption. [env var: ACAPY_WALLET_REKEY_DERIVATION_METHOD]
+  --wallet-storage-creds <storage-creds>
+                        Specifies the storage credentials to use for the wallet. This is required if you are for using 'postgres_storage' wallet For example, '{"account":"postgres","password":
+                        "mysecretpassword","admin_account":"postgres", "admin_password":"mysecretpassword"}'.NOTE: admin_user must have the CREATEDB role or else initialization will fail. [env var: ACAPY_WALLET_STORAGE_CREDS]   
+  --replace-public-did  If this parameter is set and an agent already has a public DID, and the '--seed' parameter specifies a new DID, the agent will use the new DID in place of the existing DID. Default: false. [env var:      
+                        ACAPY_REPLACE_PUBLIC_DID]
+  --recreate-wallet     If an existing wallet exists with the same name, remove and recreate it during provisioning. [env var: ACAPY_RECREATE_WALLET]
+
+Args that start with '--' can also be set in a config file (specified via --arg-file). The config file uses YAML syntax and must represent a YAML 'mapping' (for details, see http://learn.getgrav.org/advanced/yaml). In general,  
+command-line values override environment variables which override config file values which override defaults.
