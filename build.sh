@@ -8,7 +8,7 @@ docker run -it --rm \
   --outbound-transport http \
   --admin 0.0.0.0 8031 \
   --admin-insecure-mode \
-  --webhook-url http://host.docker.internal:8051/webhooks \
+  --webhook-url $1 \
   --label "FreshAgent" \
   --wallet-type askar \
   --wallet-name fresh_wallet \
