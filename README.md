@@ -1,7 +1,6 @@
 ### Initialize with docker
 
-docker build -t controller_py .
-docker run -it --rm -p 8051:8051 controller_py
+docker compose up
 
 #### Alongside
 

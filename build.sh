@@ -9,7 +9,7 @@ docker run -it --rm \
   --admin 0.0.0.0 8031 \
   --admin-insecure-mode \
   --webhook-url $1 \
-  --label "FreshAgent" \
+  --label "Agent1" \
   --wallet-type askar \
   --wallet-name fresh_wallet \
   --wallet-key fresh123 \
