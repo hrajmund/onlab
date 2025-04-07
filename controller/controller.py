@@ -1,6 +1,7 @@
 import json
 import os
 import collections
+import requests
 from arpeggio import *
 from arpeggio import RegExMatch as _
 from flask import Flask, request, render_template_string, redirect
@@ -22,12 +23,62 @@ def field():                    return [quoted_field, field_content]
 def record():                   return field, ZeroOrMore(",", field)
 def csvfile():                  return OneOrMore([record, '\n']), EOF
 
-if os.path.exists(LOG_FILE):
-    with open(LOG_FILE, "r") as f:
-        try:
-            webhook_logs = json.load(f)
-        except json.JSONDecodeError:
-            webhook_logs = []
+def redirect_with_alert(message: str, target: str = "/"):
+    return f"""
+        <script>
+            alert("{message}");
+            window.location.href = "{target}";
+        </script>
+    """
+
+@app.route("/connect_john_jane", methods=["POST"])
+def connect_john_jane():
+    response = requests.post("http://john:8031/out-of-band/create-invitation", json={
+        "handshake_protocols": ["https://didcomm.org/didexchange/1.0"],
+        "use_public_did": False
+    })
+    invitation = response.json()["invitation"]
+
+    requests.post("http://jane:8032/out-of-band/receive-invitation", json=invitation)
+
+    return redirect_with_alert("Created invitation between John and Jane!")
+
+@app.route("/issue_credential", methods=["POST"])
+def issue_credential():
+    try:
+        with open("cred_def.txt", "r") as f:
+            cred_def_id = f.read().strip()
+    except FileNotFoundError:
+        return redirect_with_alert("The credential definition is not found!")
+
+    conns = requests.get("http://john:8031/connections").json()["results"]
+    if not conns:
+        return redirect_with_alert("There is no connection between John and Jane!")
+
+    conn_id = conns[0]["connection_id"]
+
+    credential = {
+        "connection_id": conn_id,
+        "credential_preview": {
+            "@type": "issue-credential/2.0/credential-preview",
+            "attributes": [
+                {"name": "name", "value": "Jane Doe"},
+                {"name": "role", "value": "User"}
+            ]
+        },
+        "filter": {
+            "indy": {
+                "cred_def_id": cred_def_id
+            }
+        }
+    }
+
+    response = requests.post("http://john:8031/issue-credential-2.0/send-offer", json=credential)
+    if response.status_code == 200:
+        return redirect_with_alert("Credential offer sent to Jane")
+    else:
+        return redirect_with_alert("Error with sending the offer!")
+
 
 @app.route('/subscribe', methods=['POST'])
 def subscribe_form():
@@ -39,6 +90,38 @@ def subscribe_form():
         f = open("agents.txt", "a")
         return redirect("/")
     return "Hiányzó adat", 400
+
+@app.route("/init_schema", methods=["POST"])
+def init_schema():
+    schema_body = {
+        "attributes": ["name", "role"],
+        "schema_name": "MyTestSchema",
+        "schema_version": "1.0"
+    }
+    schema_resp = requests.post("http://john:8031/schemas", json=schema_body)
+    if not schema_resp.ok:
+        return redirect_with_alert(f"Creating schema failed! Response: {schema_resp.text}")
+
+    try:
+        schema_id = schema_resp.json()["schema_id"]
+    except Exception as e:
+        return redirect_with_alert(f"Error with json: {str(e)}\\nResponse: {schema_resp.text}")
+
+
+    cred_def_body = {
+        "schema_id": schema_id,
+        "support_revocation": False,
+        "tag": "default"
+    }
+    cred_def_resp = requests.post("http://john:8031/credential-definitions", json=cred_def_body)
+    cred_def_id = cred_def_resp.json()["credential_definition_id"]
+
+    with open("cred_def.txt", "w") as f:
+        f.write(cred_def_id)
+
+    return redirect_with_alert(
+        f"Successfully created schema and cred def!\\n\\nSchema ID: {schema_id}\\nCred Def ID: {cred_def_id}"
+    )
 
 @app.route('/webhooks/topic/<topic>/', methods=['POST'])
 def webhook(topic):
@@ -52,22 +135,10 @@ def webhook(topic):
     print(f"Webhook received: {topic}", flush=True)
     return "ok", 200
 
-@app.route('/test')
-def TestPage():
-    return """
-        <h1>Hello world</h1>
-        <form action="/" method="get">
-            <button>Go back </button>
-        </form>
-    """
-
 @app.route('/')
 def index():
     html = """
     <h1>Controller is running!</h1>
-    <form action="/test" method="get">
-        <button>Goto test</button>
-    </form>
 
     {% if agents %}
         <h2>Agents: </h2>
@@ -85,16 +156,24 @@ def index():
         <button type="submit">Subsrcibe</button>
     </form>
 
-    {% if logs %}
-        <h2>Webhook events:</h2>
-        {% for log in logs %}
-            <h3>{{ log.topic }}</h3>
-            <pre>{{ log.data | tojson(indent=2) }}</pre>
-            <hr>
-        {% endfor %}
-    {% else %}
-        <p>Currently there are no webhooks.</p>
-    {% endif %}
+    <h2>Actions</h2>
+
+    <form action="/connect_john_jane" method="post">
+        <button type="submit">John -> Jane: Create Connection</button>
+    </form>
+
+    <form action="/issue_credential" method="post">
+        <button type="submit">John -> Jane: Issue VC</button>
+    </form>
+
+    <form action="/request_proof" method="post">
+        <button type="submit">James -> Jane: Proof request</button>
+    </form>
+
+    <form action="/init_schema" method="post">
+        <button type="submit">Create Schema + Credential Definition -> John</button>
+    </form>
+    <hr>
     """
     return render_template_string(html, logs=webhook_logs, agents=agent_list)
 

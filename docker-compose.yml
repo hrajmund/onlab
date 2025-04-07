@@ -18,7 +18,7 @@ services:
       --auto-respond-credential-request
       --auto-respond-presentation-request
       --no-ledger
-      --endpoint http://agent:8020
+      --endpoint http://john:8020
     ports:
       - "8020:8020"
       - "8031:8031"
@@ -33,7 +33,7 @@ services:
       --outbound-transport http
       --admin 0.0.0.0 8032
       --admin-insecure-mode
-      --webhook-url http://controller:8052/webhooks
+      --webhook-url http://controller:8051/webhooks
       --label Jane
       --wallet-type askar
       --wallet-name janeswallet
@@ -44,10 +44,36 @@ services:
       --auto-respond-credential-request
       --auto-respond-presentation-request
       --no-ledger
-      --endpoint http://agent:8021
+      --endpoint http://jane:8021
     ports:
       - "8021:8021"
       - "8032:8032"
+    depends_on:
+      - controller
+
+  James:
+    image: ghcr.io/hyperledger/aries-cloudagent-python:py3.9-0.12.6
+    command: >
+      start
+      --inbound-transport http 0.0.0.0 8022
+      --outbound-transport http
+      --admin 0.0.0.0 8033
+      --admin-insecure-mode
+      --webhook-url http://controller:8051/webhooks
+      --label John
+      --wallet-type askar
+      --wallet-name jameswallet
+      --wallet-key jameskey123
+      --auto-provision
+      --auto-accept-invites
+      --auto-respond-credential-offer
+      --auto-respond-credential-request
+      --auto-respond-presentation-request
+      --no-ledger
+      --endpoint http://james:8023
+    ports:
+      - "8023:8023"
+      - "8033:8033"
     depends_on:
       - controller
 
