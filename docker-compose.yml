@@ -17,7 +17,8 @@ services:
       --auto-respond-credential-offer
       --auto-respond-credential-request
       --auto-respond-presentation-request
-      --no-ledger
+      --genesis-url http://host.docker.internal:9000/genesis
+      --seed 000000000000000000000000Steward1
       --endpoint http://john:8020
     ports:
       - "8020:8020"
@@ -43,7 +44,8 @@ services:
       --auto-respond-credential-offer
       --auto-respond-credential-request
       --auto-respond-presentation-request
-      --no-ledger
+      --genesis-url http://host.docker.internal:9000/genesis
+      --seed 000000000000000000000000Steward1
       --endpoint http://jane:8021
     ports:
       - "8021:8021"
@@ -69,7 +71,8 @@ services:
       --auto-respond-credential-offer
       --auto-respond-credential-request
       --auto-respond-presentation-request
-      --no-ledger
+      --genesis-url http://host.docker.internal:9000/genesis
+      --seed 000000000000000000000000Steward1
       --endpoint http://james:8023
     ports:
       - "8023:8023"

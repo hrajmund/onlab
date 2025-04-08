@@ -4,7 +4,7 @@ import collections
 import requests
 from arpeggio import *
 from arpeggio import RegExMatch as _
-from flask import Flask, request, render_template_string, redirect
+from flask import Flask, request, render_template_string, redirect, Response
 
 app = Flask(__name__)
 LOG_FILE = "log.json"
@@ -24,12 +24,14 @@ def record():                   return field, ZeroOrMore(",", field)
 def csvfile():                  return OneOrMore([record, '\n']), EOF
 
 def redirect_with_alert(message: str, target: str = "/"):
-    return f"""
+    html = f"""
         <script>
             alert("{message}");
             window.location.href = "{target}";
         </script>
     """
+    return Response(html, mimetype='text/html')
+
 
 @app.route("/connect_john_jane", methods=["POST"])
 def connect_john_jane():
@@ -52,10 +54,11 @@ def issue_credential():
         return redirect_with_alert("The credential definition is not found!")
 
     conns = requests.get("http://john:8031/connections").json()["results"]
-    if not conns:
+    active_conns = [conn for conn in conns if conn["state"] == "active"]
+    if not active_conns:
         return redirect_with_alert("There is no connection between John and Jane!")
 
-    conn_id = conns[0]["connection_id"]
+    conn_id = active_conns[0]["connection_id"]
 
     credential = {
         "connection_id": conn_id,
@@ -74,11 +77,10 @@ def issue_credential():
     }
 
     response = requests.post("http://john:8031/issue-credential-2.0/send-offer", json=credential)
-    if response.status_code == 200:
+    if response.ok:
         return redirect_with_alert("Credential offer sent to Jane")
     else:
-        return redirect_with_alert("Error with sending the offer!")
-
+        return redirect_with_alert(f"Error with sending the offer! Response: {response.status_code} {response.text}")
 
 @app.route('/subscribe', methods=['POST'])
 def subscribe_form():
@@ -92,36 +94,43 @@ def subscribe_form():
     return "Hiányzó adat", 400
 
 @app.route("/init_schema", methods=["POST"])
+@app.route("/init_schema")
 def init_schema():
-    schema_body = {
-        "attributes": ["name", "role"],
+    schema = {
         "schema_name": "MyTestSchema",
-        "schema_version": "1.0"
+        "version": "1.0",
+        "attributes": ["name", "email", "age"]
     }
-    schema_resp = requests.post("http://john:8031/schemas", json=schema_body)
-    if not schema_resp.ok:
-        return redirect_with_alert(f"Creating schema failed! Response: {schema_resp.text}")
 
     try:
-        schema_id = schema_resp.json()["schema_id"]
+        schema_resp = requests.post("http://issuer:8031/schemas", json=schema)
+        if schema_resp.status_code == 200:
+            schema_id = schema_resp.json()["schema_id"]
+        elif schema_resp.status_code == 400 and "already exists" in schema_resp.text:
+            existing = requests.get("http://issuer:8031/schemas/created").json()
+            schema_id = next((sid for sid in existing["schema_ids"] if schema["schema_name"] in sid and schema["version"] in sid), None)
+            if not schema_id:
+                return redirect_with_alert("Schema already exists, de nem található vissza!")
+        else:
+            return redirect_with_alert(f"Creating schema failed! Response: {schema_resp.status_code}: {schema_resp.text}")
+
+        cred_def = {
+            "schema_id": schema_id,
+            "support_revocation": False,
+            "tag": "default"
+        }
+        cred_def_resp = requests.post("http://issuer:8031/credential-definitions", json=cred_def)
+        if cred_def_resp.ok:
+            cred_def_id = cred_def_resp.json()["credential_definition_id"]
+            with open("cred_def.txt", "w") as f:
+                f.write(cred_def_id)
+            return redirect_with_alert(f"Schema & Credential Definition OK!\nCredDef ID:\n{cred_def_id}")
+        else:
+            return redirect_with_alert(f"Creating credential definition failed! Response: {cred_def_resp.status_code}: {cred_def_resp.text}")
+
     except Exception as e:
-        return redirect_with_alert(f"Error with json: {str(e)}\\nResponse: {schema_resp.text}")
+        return redirect_with_alert(f"Hiba: {str(e)}")
 
-
-    cred_def_body = {
-        "schema_id": schema_id,
-        "support_revocation": False,
-        "tag": "default"
-    }
-    cred_def_resp = requests.post("http://john:8031/credential-definitions", json=cred_def_body)
-    cred_def_id = cred_def_resp.json()["credential_definition_id"]
-
-    with open("cred_def.txt", "w") as f:
-        f.write(cred_def_id)
-
-    return redirect_with_alert(
-        f"Successfully created schema and cred def!\\n\\nSchema ID: {schema_id}\\nCred Def ID: {cred_def_id}"
-    )
 
 @app.route('/webhooks/topic/<topic>/', methods=['POST'])
 def webhook(topic):

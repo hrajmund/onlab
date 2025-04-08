@@ -1,3 +1,6 @@
 [submodule "acapy"]
 	path = acapy
 	url = https://github.com/openwallet-foundation/acapy.git
+[submodule "von-network"]
+	path = von-network
+	url = git@github.com:bcgov/von-network.git
