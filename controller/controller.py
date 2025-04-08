@@ -1,27 +1,25 @@
 import json
 import os
+import time
 import collections
 import requests
-from arpeggio import *
-from arpeggio import RegExMatch as _
 from flask import Flask, request, render_template_string, redirect
 
 app = Flask(__name__)
 LOG_FILE = "log.json"
 webhook_logs = []
 
-### TODO - To be discussed
-# The agent tuple should be a class
-# BaseAgent then AskarAgent ?
 agentConnection = collections.namedtuple('agentConnection', ['name', 'admin_url', 'endpoint'])
 agent_list = []
 
-def field_content_quoted():     return _(r'(("")|([^"]))+')
-def quoted_field():             return '"', field_content_quoted, '"'
-def field_content():            return _(r'([^,\n])+')
-def field():                    return [quoted_field, field_content]
-def record():                   return field, ZeroOrMore(",", field)
-def csvfile():                  return OneOrMore([record, '\n']), EOF
+AGENTS = {
+    "john": {"endpoint": "http://john:8031"},
+    "jane": {"endpoint": "http://jane:8032"},
+    "james": {"endpoint": "http://james:8033"},
+}
+
+SCHEMA_ID = None
+CRED_DEF_IDS = {}
 
 def redirect_with_alert(message: str, target: str = "/"):
     return f"""
@@ -38,9 +36,7 @@ def connect_john_jane():
         "use_public_did": False
     })
     invitation = response.json()["invitation"]
-
     requests.post("http://jane:8032/out-of-band/receive-invitation", json=invitation)
-
     return redirect_with_alert("Created invitation between John and Jane!")
 
 @app.route("/issue_credential", methods=["POST"])
@@ -79,6 +75,38 @@ def issue_credential():
     else:
         return redirect_with_alert("Error with sending the offer!")
 
+@app.route("/init_schema", methods=["POST"])
+def init_schema():
+    global SCHEMA_ID, CRED_DEF_IDS
+
+    try:
+        schema = {
+            "schema_name": "DummySchema",
+            "schema_version": "1.0",
+            "attributes": ["name", "email"]
+        }
+
+        john_resp = requests.post(f"{AGENTS['john']['endpoint']}/schemas", json=schema)
+        schema_id = john_resp.json()["schema_id"]
+        SCHEMA_ID = schema_id
+
+        for agent in ["john", "jane"]:
+            resp = requests.post(
+                f"{AGENTS[agent]['endpoint']}/credential-definitions",
+                json={"schema_id": schema_id, "support_revocation": False}
+            )
+            cred_def_id = resp.json()["credential_definition_id"]
+            CRED_DEF_IDS[agent] = cred_def_id
+
+        with open("cred_def.txt", "w") as f:
+            f.write(CRED_DEF_IDS["john"])
+
+        return redirect_with_alert(
+            f"Schema and credential definitions created.\\n\\nSchema ID: {SCHEMA_ID}\\nJohn: {CRED_DEF_IDS['john']}\\nJane: {CRED_DEF_IDS['jane']}"
+        )
+
+    except Exception as e:
+        return redirect_with_alert(f"Hiba történt schema létrehozás közben:\\n{e}")
 
 @app.route('/subscribe', methods=['POST'])
 def subscribe_form():
@@ -87,41 +115,8 @@ def subscribe_form():
     endpoint = request.form.get("endpoint")
     if label:
         agent_list.append(agentConnection(label, admin_url, endpoint))
-        f = open("agents.txt", "a")
         return redirect("/")
     return "Hiányzó adat", 400
-
-@app.route("/init_schema", methods=["POST"])
-def init_schema():
-    schema_body = {
-        "attributes": ["name", "role"],
-        "schema_name": "MyTestSchema",
-        "schema_version": "1.0"
-    }
-    schema_resp = requests.post("http://john:8031/schemas", json=schema_body)
-    if not schema_resp.ok:
-        return redirect_with_alert(f"Creating schema failed! Response: {schema_resp.text}")
-
-    try:
-        schema_id = schema_resp.json()["schema_id"]
-    except Exception as e:
-        return redirect_with_alert(f"Error with json: {str(e)}\\nResponse: {schema_resp.text}")
-
-
-    cred_def_body = {
-        "schema_id": schema_id,
-        "support_revocation": False,
-        "tag": "default"
-    }
-    cred_def_resp = requests.post("http://john:8031/credential-definitions", json=cred_def_body)
-    cred_def_id = cred_def_resp.json()["credential_definition_id"]
-
-    with open("cred_def.txt", "w") as f:
-        f.write(cred_def_id)
-
-    return redirect_with_alert(
-        f"Successfully created schema and cred def!\\n\\nSchema ID: {schema_id}\\nCred Def ID: {cred_def_id}"
-    )
 
 @app.route('/webhooks/topic/<topic>/', methods=['POST'])
 def webhook(topic):
@@ -153,7 +148,7 @@ def index():
         <label>Name: <input type="text" name="label" required></label><br>
         <label>Admin URL: <input type="text" name="admin_url" required></label><br>
         <label>Endpoint URL: <input type="text" name="endpoint" required></label><br>
-        <button type="submit">Subsrcibe</button>
+        <button type="submit">Subscribe</button>
     </form>
 
     <h2>Actions</h2>
@@ -166,12 +161,8 @@ def index():
         <button type="submit">John -> Jane: Issue VC</button>
     </form>
 
-    <form action="/request_proof" method="post">
-        <button type="submit">James -> Jane: Proof request</button>
-    </form>
-
     <form action="/init_schema" method="post">
-        <button type="submit">Create Schema + Credential Definition -> John</button>
+        <button type="submit">Create Schema + Credential Definition</button>
     </form>
     <hr>
     """
@@ -179,7 +170,3 @@ def index():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8051, debug=True)
-    
-    #parser = ParserPython(csvfile, ws='\t ')
-    #test_data = open('../conf/agent.csv', 'r').read()
-    #parse_tree = parser.parse(test_data)
