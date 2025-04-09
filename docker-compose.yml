@@ -1,95 +1,108 @@
 services:
-  John:
-    image: ghcr.io/hyperledger/aries-cloudagent-python:py3.9-0.12.6
-    command: >
-      start
-      --inbound-transport http 0.0.0.0 8020
-      --outbound-transport http
-      --admin 0.0.0.0 8031
-      --admin-insecure-mode
-      --webhook-url http://controller:8051/webhooks
-      --label John
-      --wallet-type askar
-      --wallet-name johnswallet
-      --wallet-key johnskey123
-      --auto-provision
-      --auto-accept-invites
-      --auto-respond-credential-offer
-      --auto-respond-credential-request
-      --auto-respond-presentation-request
-      --auto-accept-requests
-      --auto-ping-connection  
-      --public-invites
-      --no-ledger
-      --endpoint http://john:8020
-    ports:
-      - "8020:8020"
-      - "8031:8031"
-    depends_on:
-      - controller
-
-  Jane:
-    image: ghcr.io/hyperledger/aries-cloudagent-python:py3.9-0.12.6
-    command: >
-      start
-      --inbound-transport http 0.0.0.0 8021
-      --outbound-transport http
-      --admin 0.0.0.0 8032
-      --admin-insecure-mode
-      --webhook-url http://controller:8051/webhooks
-      --label Jane
-      --wallet-type askar
-      --wallet-name janeswallet
-      --wallet-key janeskey123
-      --auto-provision
-      --auto-accept-invites
-      --auto-respond-credential-offer
-      --auto-respond-credential-request
-      --auto-respond-presentation-request
-      --auto-accept-requests
-      --public-invites
-      --auto-ping-connection
-      --no-ledger
-      --endpoint http://jane:8021
-    ports:
-      - "8021:8021"
-      - "8032:8032"
-    depends_on:
-      - controller
-
-  James:
-    image: ghcr.io/hyperledger/aries-cloudagent-python:py3.9-0.12.6
-    command: >
-      start
-      --inbound-transport http 0.0.0.0 8022
-      --outbound-transport http
-      --admin 0.0.0.0 8033
-      --admin-insecure-mode
-      --webhook-url http://controller:8051/webhooks
-      --label James
-      --wallet-type askar
-      --wallet-name jameswallet
-      --wallet-key jameskey123
-      --auto-provision
-      --auto-accept-invites
-      --auto-respond-credential-offer
-      --auto-respond-credential-request
-      --auto-respond-presentation-request
-      --auto-accept-requests
-      --public-invites
-      --auto-ping-connection
-      --no-ledger
-      --endpoint http://james:8023
-    ports:
-      - "8023:8023"
-      - "8033:8033"
-    depends_on:
-      - controller
-
   controller:
     build:
       context: ./controller
-    environment:
-      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./controller:/app
+    working_dir: /app
     ports:
       - "8051:8051"
+    command: python controller.py
+    depends_on:
+      - john
+      - jane
+      - james
+    networks:
+      - vonx-net
+
+  john:
+    image: ghcr.io/hyperledger/aries-cloudagent-python:py3.9-0.12.6
+    container_name: onlab-John-1
+    ports:
+      - "8031:8031"
+    command: >
+      start
+      --label john
+      --inbound-transport http 0.0.0.0 8031
+      --outbound-transport http
+      --admin 0.0.0.0 8030
+      --admin-insecure-mode
+      --endpoint http://john:8031
+      --wallet-type askar
+      --wallet-name john
+      --wallet-key johnkey
+      --genesis-url http://test.bcovrin.vonx.io/genesis
+      --auto-provision
+      --auto-accept-invites
+      --auto-accept-requests
+
+  jane:
+    image: ghcr.io/hyperledger/aries-cloudagent-python:py3.9-0.12.6
+    container_name: onlab-Jane-1
+    ports:
+      - "8032:8032"
+    command: >
+      start
+      --label jane
+      --inbound-transport http 0.0.0.0 8033
+      --outbound-transport http
+      --admin 0.0.0.0 8032
+      --admin-insecure-mode
+      --endpoint http://jane:8033
+      --wallet-type askar
+      --wallet-name jane
+      --wallet-key janekey
+      --genesis-url http://test.bcovrin.vonx.io/genesis
+      --auto-provision
+      --auto-accept-invites
+      --auto-accept-requests
+
+  james:
+    image: ghcr.io/hyperledger/aries-cloudagent-python:py3.9-0.12.6
+    container_name: onlab-James-1
+    ports:
+      - "8034:8034"
+    command: >
+      start
+      --label verifier
+      --inbound-transport http 0.0.0.0 8035
+      --outbound-transport http
+      --admin 0.0.0.0 8034
+      --admin-insecure-mode
+      --endpoint http://verifier:8035
+      --wallet-type askar
+      --wallet-name verifier
+      --wallet-key verifierkey
+      --genesis-url http://test.bcovrin.vonx.io/genesis
+      --auto-provision
+      --auto-accept-invites
+      --auto-accept-requests
+      --multitenant
+      --jwt-secret somesecret
+      --auto-ping-connection
+
+#  cheqd-agent:
+#    image: ghcr.io/hyperledger/aries-cloudagent-python:py3.9-0.12.6
+#    container_name: cheqd-agent
+#    ports:
+#      - "8036:8036"
+#    command: >
+#      start
+#      --label cheqd
+#      --inbound-transport http 0.0.0.0 8037
+#      --outbound-transport http
+#      --admin 0.0.0.0 8036
+#      --admin-insecure-mode
+#      --endpoint http://cheqd-agent:8037
+#      --wallet-type askar
+#      --wallet-name cheqd
+#      --wallet-key cheqdkey
+#      --ledger-type cheqd
+#      --cheqd-ledger-id testnet-cheqd
+#      --cheqd-network testnet
+#      --cheqd-endpoint https://rpc.cheqd.net
+#      --genesis-url https://raw.githubusercontent.com/cheqd/cheqd-node/main/networks/testnet-8/genesis.json
+#      --auto-provision
+
+networks:
+  vonx-net:
