@@ -1,194 +1,186 @@
+import time
 import json
 import os
-import collections
 import requests
-from arpeggio import *
-from arpeggio import RegExMatch as _
-from flask import Flask, request, render_template_string, redirect, Response
+from flask import Flask, render_template_string, request, redirect
 
 app = Flask(__name__)
-LOG_FILE = "log.json"
-webhook_logs = []
 
-### TODO - To be discussed
-# The agent tuple should be a class
-# BaseAgent then AskarAgent ?
-agentConnection = collections.namedtuple('agentConnection', ['name', 'admin_url', 'endpoint'])
-agent_list = []
+AGENTS = {
+    "john": {"endpoint": "http://john:8031"},
+    "jane": {"endpoint": "http://jane:8032"},
+    "james": {"endpoint": "http://james:8033"},
+}
 
-def field_content_quoted():     return _(r'(("")|([^"]))+')
-def quoted_field():             return '"', field_content_quoted, '"'
-def field_content():            return _(r'([^,\n])+')
-def field():                    return [quoted_field, field_content]
-def record():                   return field, ZeroOrMore(",", field)
-def csvfile():                  return OneOrMore([record, '\n']), EOF
+SCHEMA_ID = "Th7MpTaRZVRYnPiabds81Y:2:DummySchema:1.0"
+CRED_DEF_IDS = {
+    "john": "Th7MpTaRZVRYnPiabds81Y:3:CL:12345:john",
+}
 
-def redirect_with_alert(message: str, target: str = "/"):
-    html = f"""
-        <script>
-            alert("{message}");
-            window.location.href = "{target}";
-        </script>
-    """
-    return Response(html, mimetype='text/html')
+VDR_FILE = "vdr.json"
 
+def redirect_with_alert(message, target="/"):
+    return render_template_string(f"""
+        <script>alert(\"{message}\"); window.location.href=\"{target}\";</script>
+    """)
 
-@app.route("/connect_john_jane", methods=["POST"])
-def connect_john_jane():
-    response = requests.post("http://john:8031/out-of-band/create-invitation", json={
-        "handshake_protocols": ["https://didcomm.org/didexchange/1.0"],
-        "use_public_did": False
-    })
-    invitation = response.json()["invitation"]
+def update_vdr(entry):
+    data = []
+    if os.path.exists(VDR_FILE):
+        with open(VDR_FILE, "r") as f:
+            try:
+                data = json.load(f)
+            except json.JSONDecodeError:
+                data = []
 
-    requests.post("http://jane:8032/out-of-band/receive-invitation", json=invitation)
+    data.append(entry)
 
-    return redirect_with_alert("Created invitation between John and Jane!")
+    with open(VDR_FILE, "w") as f:
+        json.dump(data, f, indent=2)
+
+def get_connection_id(sender, receiver):
+    if not os.path.exists(VDR_FILE):
+        return None
+    with open(VDR_FILE, "r") as f:
+        try:
+            data = json.load(f)
+            for entry in data:
+                if entry.get("issuer") == sender and entry.get("holder") == receiver and entry.get("type") == "connection":
+                    return entry.get("connection_id")
+        except json.JSONDecodeError:
+            return None
+    return None
+
+@app.route("/")
+def index():
+    return render_template_string("""
+        <h1>ACA-Py Dummy Controller</h1>
+
+        <form action="/issue_credential" method="post">
+            <h2>Issue Credential</h2>
+            <input type="hidden" name="sender" value="john">
+            <input type="hidden" name="receiver" value="jane">
+            <button>John → Jane: Issue Credential</button>
+        </form>
+
+        <form action="/request_proof" method="post">
+            <h2>Request Proof</h2>
+            <input type="hidden" name="verifier" value="james">
+            <input type="hidden" name="holder" value="jane">
+            <button>James → Jane: Request Proof</button>
+        </form>
+        
+        <form action="/vdr" method="get">
+            <h2>View VDR</h2>
+            <button>Show VDR</button>
+        </form>
+    """)
 
 @app.route("/issue_credential", methods=["POST"])
 def issue_credential():
-    try:
-        with open("cred_def.txt", "r") as f:
-            cred_def_id = f.read().strip()
-    except FileNotFoundError:
-        return redirect_with_alert("The credential definition is not found!")
+    sender_ep = "http://john:8031"
+    receiver_ep = "http://jane:8032"
 
-    conns = requests.get("http://john:8031/connections").json()["results"]
-    active_conns = [conn for conn in conns if conn["state"] == "active"]
-    if not active_conns:
-        return redirect_with_alert("There is no connection between John and Jane!")
+    # Hozz létre kapcsolatot
+    inv = requests.post(f"{receiver_ep}/connections/create-invitation").json()
+    conn_id = inv["connection_id"]
+    requests.post(f"{sender_ep}/connections/receive-invitation", json=inv["invitation"])
 
-    conn_id = active_conns[0]["connection_id"]
+    # Várjuk meg, amíg aktív lesz a kapcsolat
+    for _ in range(20):
+        state = requests.get(f"{sender_ep}/connections/{conn_id}").json()["state"]
+        if state == "active":
+            break
+        time.sleep(1)
 
-    credential = {
+    # JSON-LD credential offer küldése
+    cred_offer = {
         "connection_id": conn_id,
-        "credential_preview": {
-            "@type": "issue-credential/2.0/credential-preview",
-            "attributes": [
-                {"name": "name", "value": "Jane Doe"},
-                {"name": "role", "value": "User"}
-            ]
-        },
         "filter": {
-            "indy": {
-                "cred_def_id": cred_def_id
+            "ld_proof": {
+                "credential": {
+                    "@context": ["https://www.w3.org/2018/credentials/v1"],
+                    "type": ["VerifiableCredential"],
+                    "issuer": "did:web:john.agent",
+                    "issuanceDate": "2025-04-09T00:00:00Z",
+                    "credentialSubject": {
+                        "id": "did:web:jane.agent",
+                        "name": "Jane Doe",
+                        "degree": {
+                            "type": "BachelorDegree",
+                            "name": "Computer Science"
+                        }
+                    }
+                },
+                "options": {
+                    "proofType": "Ed25519Signature2018"
+                }
             }
         }
     }
 
-    response = requests.post("http://john:8031/issue-credential-2.0/send-offer", json=credential)
-    if response.ok:
-        return redirect_with_alert("Credential offer sent to Jane")
-    else:
-        return redirect_with_alert(f"Error with sending the offer! Response: {response.status_code} {response.text}")
+    response = requests.post(f"{sender_ep}/issue-credential-2.0/send-offer", json=cred_offer)
+    return redirect_with_alert(response.text)
 
-@app.route('/subscribe', methods=['POST'])
-def subscribe_form():
-    label = request.form.get("label")
-    admin_url = request.form.get("admin_url")
-    endpoint = request.form.get("endpoint")
-    if label:
-        agent_list.append(agentConnection(label, admin_url, endpoint))
-        f = open("agents.txt", "a")
-        return redirect("/")
-    return "Hiányzó adat", 400
+@app.route("/request_proof", methods=["POST"])
+def request_proof():
+    verifier = request.form["verifier"]
+    holder = request.form["holder"]
 
-@app.route("/init_schema", methods=["POST"])
-@app.route("/init_schema")
-def init_schema():
-    schema = {
-        "schema_name": "MyTestSchema",
-        "version": "1.0",
-        "attributes": ["name", "email", "age"]
+    verifier_ep = AGENTS[verifier]["endpoint"]
+
+    conn_id = get_connection_id(holder, verifier)
+    if not conn_id:
+        return redirect_with_alert("No connection between verifier and holder.")
+
+    proof_request = {
+        "connection_id": conn_id,
+        "presentation_request": {
+            "indy": {
+                "name": "Email Proof",
+                "version": "1.0",
+                "requested_attributes": {
+                    "attr1_referent": {
+                        "name": "email"
+                    }
+                },
+                "requested_predicates": {}
+            }
+        }
     }
 
-    try:
-        schema_resp = requests.post("http://issuer:8031/schemas", json=schema)
-        if schema_resp.status_code == 200:
-            schema_id = schema_resp.json()["schema_id"]
-        elif schema_resp.status_code == 400 and "already exists" in schema_resp.text:
-            existing = requests.get("http://issuer:8031/schemas/created").json()
-            schema_id = next((sid for sid in existing["schema_ids"] if schema["schema_name"] in sid and schema["version"] in sid), None)
-            if not schema_id:
-                return redirect_with_alert("Schema already exists, de nem található vissza!")
-        else:
-            return redirect_with_alert(f"Creating schema failed! Response: {schema_resp.status_code}: {schema_resp.text}")
+    r = requests.post(f"{verifier_ep}/present-proof-2.0/send-request", json=proof_request)
+    if r.status_code != 200:
+        return redirect_with_alert(f"Failed to send proof request: {r.text}")
 
-        cred_def = {
-            "schema_id": schema_id,
-            "support_revocation": False,
-            "tag": "default"
-        }
-        cred_def_resp = requests.post("http://issuer:8031/credential-definitions", json=cred_def)
-        if cred_def_resp.ok:
-            cred_def_id = cred_def_resp.json()["credential_definition_id"]
-            with open("cred_def.txt", "w") as f:
-                f.write(cred_def_id)
-            return redirect_with_alert(f"Schema & Credential Definition OK!\nCredDef ID:\n{cred_def_id}")
-        else:
-            return redirect_with_alert(f"Creating credential definition failed! Response: {cred_def_resp.status_code}: {cred_def_resp.text}")
+    update_vdr({
+        "type": "proof_request",
+        "verifier": verifier,
+        "holder": holder,
+        "connection_id": conn_id,
+        "timestamp": time.time()
+    })
 
-    except Exception as e:
-        return redirect_with_alert(f"Hiba: {str(e)}")
+    return redirect_with_alert("Proof request sent successfully.")
 
+@app.route("/vdr", methods=["GET"])
+def get_vdr():
+    if not os.path.exists(VDR_FILE):
+        return {"error": "VDR not found"}, 404
+    with open(VDR_FILE, "r") as f:
+        try:
+            return json.load(f)
+        except json.JSONDecodeError:
+            return {"error": "Invalid VDR file"}, 500
 
-@app.route('/webhooks/topic/<topic>/', methods=['POST'])
+@app.route("/webhooks/topic/<topic>/", methods=["POST"])
 def webhook(topic):
-    data = request.get_json()
-    log_entry = {"topic": topic, "data": data}
-    webhook_logs.append(log_entry)
+    data = request.json
+    print(f"[WEBHOOK] Topic: {topic}\n{json.dumps(data, indent=2)}")
 
-    with open(LOG_FILE, "w") as f:
-        json.dump(webhook_logs, f, indent=2)
-
-    print(f"Webhook received: {topic}", flush=True)
-    return "ok", 200
-
-@app.route('/')
-def index():
-    html = """
-    <h1>Controller is running!</h1>
-
-    {% if agents %}
-        <h2>Agents: </h2>
-        {% for agent in agents %}
-            <p>{{ agent.name }} {{ agent.admin_url }} {{ agent.endpoint }}</p>
-        {% endfor %}
-    {% else %}
-        <p>Currently there are no agents.</p>
-    {% endif %}
-    <h2>Register Agent</h2>
-    <form action="/subscribe" method="post">
-        <label>Name: <input type="text" name="label" required></label><br>
-        <label>Admin URL: <input type="text" name="admin_url" required></label><br>
-        <label>Endpoint URL: <input type="text" name="endpoint" required></label><br>
-        <button type="submit">Subsrcibe</button>
-    </form>
-
-    <h2>Actions</h2>
-
-    <form action="/connect_john_jane" method="post">
-        <button type="submit">John -> Jane: Create Connection</button>
-    </form>
-
-    <form action="/issue_credential" method="post">
-        <button type="submit">John -> Jane: Issue VC</button>
-    </form>
-
-    <form action="/request_proof" method="post">
-        <button type="submit">James -> Jane: Proof request</button>
-    </form>
-
-    <form action="/init_schema" method="post">
-        <button type="submit">Create Schema + Credential Definition -> John</button>
-    </form>
-    <hr>
-    """
-    return render_template_string(html, logs=webhook_logs, agents=agent_list)
+    if topic == "connections" and data.get("state") == "active":
+        print(f"✅ Kapcsolat aktív! ID: {data['connection_id']}")
+    return "", 200
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8051, debug=True)
-    
-    #parser = ParserPython(csvfile, ws='\t ')
-    #test_data = open('../conf/agent.csv', 'r').read()
-    #parse_tree = parser.parse(test_data)

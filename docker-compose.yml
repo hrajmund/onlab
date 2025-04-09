@@ -17,8 +17,10 @@ services:
       --auto-respond-credential-offer
       --auto-respond-credential-request
       --auto-respond-presentation-request
-      --genesis-url http://host.docker.internal:9000/genesis
-      --seed 000000000000000000000000Steward1
+      --auto-accept-requests
+      --auto-ping-connection  
+      --public-invites
+      --no-ledger
       --endpoint http://john:8020
     ports:
       - "8020:8020"
@@ -44,8 +46,10 @@ services:
       --auto-respond-credential-offer
       --auto-respond-credential-request
       --auto-respond-presentation-request
-      --genesis-url http://host.docker.internal:9000/genesis
-      --seed 000000000000000000000000Steward1
+      --auto-accept-requests
+      --public-invites
+      --auto-ping-connection
+      --no-ledger
       --endpoint http://jane:8021
     ports:
       - "8021:8021"
@@ -62,7 +66,7 @@ services:
       --admin 0.0.0.0 8033
       --admin-insecure-mode
       --webhook-url http://controller:8051/webhooks
-      --label John
+      --label James
       --wallet-type askar
       --wallet-name jameswallet
       --wallet-key jameskey123
@@ -71,8 +75,10 @@ services:
       --auto-respond-credential-offer
       --auto-respond-credential-request
       --auto-respond-presentation-request
-      --genesis-url http://host.docker.internal:9000/genesis
-      --seed 000000000000000000000000Steward1
+      --auto-accept-requests
+      --public-invites
+      --auto-ping-connection
+      --no-ledger
       --endpoint http://james:8023
     ports:
       - "8023:8023"
