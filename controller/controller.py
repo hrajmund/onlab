@@ -2,6 +2,7 @@ import json
 import os
 import collections
 import requests
+import time
 from arpeggio import *
 from arpeggio import RegExMatch as _
 from flask import Flask, request, render_template_string, redirect
@@ -10,9 +11,6 @@ app = Flask(__name__)
 LOG_FILE = "log.json"
 webhook_logs = []
 
-### TODO - To be discussed
-# The agent tuple should be a class
-# BaseAgent then AskarAgent ?
 agentConnection = collections.namedtuple('agentConnection', ['name', 'admin_url', 'endpoint'])
 agent_list = []
 
@@ -31,6 +29,15 @@ def redirect_with_alert(message: str, target: str = "/"):
         </script>
     """
 
+def wait_until_connection_active(admin_url, conn_id, timeout=10):
+    for _ in range(timeout):
+        conns = requests.get(f"{admin_url}/connections").json()["results"]
+        conn = next((c for c in conns if c["connection_id"] == conn_id), None)
+        if conn and conn["state"] == "active":
+            return True
+        time.sleep(1)
+    return False
+
 @app.route("/connect_john_jane", methods=["POST"])
 def connect_john_jane():
     response = requests.post("http://john:8031/out-of-band/create-invitation", json={
@@ -47,7 +54,7 @@ def connect_john_jane():
 def issue_credential():
     try:
         with open("cred_def.txt", "r") as f:
-            cred_def_id = f.read().strip()
+            cred_def_data = json.loads(f.read())
     except FileNotFoundError:
         return redirect_with_alert("The credential definition is not found!")
 
@@ -56,6 +63,9 @@ def issue_credential():
         return redirect_with_alert("There is no connection between John and Jane!")
 
     conn_id = conns[0]["connection_id"]
+
+    if not wait_until_connection_active("http://john:8031", conn_id):
+        return redirect_with_alert("Connection not ready after waiting!")
 
     credential = {
         "connection_id": conn_id,
@@ -68,17 +78,19 @@ def issue_credential():
         },
         "filter": {
             "indy": {
-                "cred_def_id": cred_def_id
+                "issuer_did": "NcYxiDXkpYi6ov5FcYDi1e",
+                "schema_id": "NcYxiDXkpYi6ov5FcYDi1e:2:MyTestSchema:1.0",
+                "cred_def_id": "NcYxiDXkpYi6ov5FcYDi1e:3:CL:20:tag"
             }
         }
     }
 
-    response = requests.post("http://john:8031/issue-credential-2.0/send-offer", json=credential)
-    if response.status_code == 200:
-        return redirect_with_alert("Credential offer sent to Jane")
-    else:
-        return redirect_with_alert("Error with sending the offer!")
+    response = requests.post("http://john:8031/issue-credential-2.0/send", json=credential)
 
+    if response.status_code == 200:
+        return redirect_with_alert("Credential issued to Jane (ledgerless)")
+    else:
+        return redirect_with_alert(f"Error sending credential!\n{response.text}")
 
 @app.route('/subscribe', methods=['POST'])
 def subscribe_form():
@@ -93,35 +105,24 @@ def subscribe_form():
 
 @app.route("/init_schema", methods=["POST"])
 def init_schema():
-    schema_body = {
-        "attributes": ["name", "role"],
+    schema = {
         "schema_name": "MyTestSchema",
-        "schema_version": "1.0"
+        "schema_version": "1.0",
+        "attributes": ["name", "role"]
     }
-    schema_resp = requests.post("http://john:8031/schemas", json=schema_body)
-    if not schema_resp.ok:
-        return redirect_with_alert(f"Creating schema failed! Response: {schema_resp.text}")
 
-    try:
-        schema_id = schema_resp.json()["schema_id"]
-    except Exception as e:
-        return redirect_with_alert(f"Error with json: {str(e)}\\nResponse: {schema_resp.text}")
-
-
-    cred_def_body = {
-        "schema_id": schema_id,
-        "support_revocation": False,
-        "tag": "default"
+    cred_def = {
+        "schema": schema,
+        "support_revocation": False
     }
-    cred_def_resp = requests.post("http://john:8031/credential-definitions", json=cred_def_body)
-    cred_def_id = cred_def_resp.json()["credential_definition_id"]
 
     with open("cred_def.txt", "w") as f:
-        f.write(cred_def_id)
+        f.write(json.dumps(cred_def))
 
     return redirect_with_alert(
-        f"Successfully created schema and cred def!\\n\\nSchema ID: {schema_id}\\nCred Def ID: {cred_def_id}"
+        "Schema and 'credential definition' data saved locally (no-ledger mode)."
     )
+
 
 @app.route('/webhooks/topic/<topic>/', methods=['POST'])
 def webhook(topic):
@@ -179,7 +180,3 @@ def index():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8051, debug=True)
-    
-    #parser = ParserPython(csvfile, ws='\t ')
-    #test_data = open('../conf/agent.csv', 'r').read()
-    #parse_tree = parser.parse(test_data)
