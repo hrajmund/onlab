@@ -15,13 +15,6 @@ webhook_logs = []
 agentConnection = collections.namedtuple('agentConnection', ['name', 'admin_url', 'endpoint'])
 agent_list = []
 
-def field_content_quoted():     return _(r'(""|[^"])+')
-def quoted_field():             return '"', field_content_quoted, '"'
-def field_content():            return _(r'([^,\n])+')
-def field():                    return [quoted_field, field_content]
-def record():                   return field, ZeroOrMore(",", field)
-def csvfile():                  return OneOrMore([record, '\n']), EOF
-
 def redirect_with_alert(message: str, target: str = "/"):
     return f"""
         <script>
@@ -215,22 +208,6 @@ def webhook(topic):
 def index():
     html = """
     <h1>Controller is running!</h1>
-
-    {% if agents %}
-        <h2>Agents: </h2>
-        {% for agent in agents %}
-            <p>{{ agent.name }} {{ agent.admin_url }} {{ agent.endpoint }}</p>
-        {% endfor %}
-    {% else %}
-        <p>Currently there are no agents.</p>
-    {% endif %}
-    <h2>Register Agent</h2>
-    <form action="/subscribe" method="post">
-        <label>Name: <input type="text" name="label" required></label><br>
-        <label>Admin URL: <input type="text" name="admin_url" required></label><br>
-        <label>Endpoint URL: <input type="text" name="endpoint" required></label><br>
-        <button type="submit">Subsrcibe</button>
-    </form>
 
     <h2>Actions</h2>
 
