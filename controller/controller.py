@@ -1,5 +1,6 @@
 import json
 import os
+import uuid
 import collections
 import requests
 import time
@@ -14,7 +15,7 @@ webhook_logs = []
 agentConnection = collections.namedtuple('agentConnection', ['name', 'admin_url', 'endpoint'])
 agent_list = []
 
-def field_content_quoted():     return _(r'(("")|([^"]))+')
+def field_content_quoted():     return _(r'(""|[^"])+')
 def quoted_field():             return '"', field_content_quoted, '"'
 def field_content():            return _(r'([^,\n])+')
 def field():                    return [quoted_field, field_content]
@@ -24,8 +25,8 @@ def csvfile():                  return OneOrMore([record, '\n']), EOF
 def redirect_with_alert(message: str, target: str = "/"):
     return f"""
         <script>
-            alert("{message}");
-            window.location.href = "{target}";
+            alert(\"{message}\");
+            window.location.href = \"{target}\";
         </script>
     """
 
@@ -67,6 +68,13 @@ def issue_credential():
     if not wait_until_connection_active("http://john:8031", conn_id):
         return redirect_with_alert("Connection not ready after waiting!")
 
+    # fetch latest credential definition id from john
+    cred_defs = requests.get("http://john:8031/credential-definitions/created").json()
+    if not cred_defs.get("credential_definition_ids"):
+        return redirect_with_alert("No credential definition found on ledger. Please init schema first!")
+
+    latest_cred_def_id = cred_defs["credential_definition_ids"][-1]
+
     credential = {
         "connection_id": conn_id,
         "credential_preview": {
@@ -78,9 +86,7 @@ def issue_credential():
         },
         "filter": {
             "indy": {
-                "issuer_did": "NcYxiDXkpYi6ov5FcYDi1e",
-                "schema_id": "NcYxiDXkpYi6ov5FcYDi1e:2:MyTestSchema:1.0",
-                "cred_def_id": "NcYxiDXkpYi6ov5FcYDi1e:3:CL:20:tag"
+                "cred_def_id": latest_cred_def_id
             }
         }
     }
@@ -88,9 +94,56 @@ def issue_credential():
     response = requests.post("http://john:8031/issue-credential-2.0/send", json=credential)
 
     if response.status_code == 200:
-        return redirect_with_alert("Credential issued to Jane (ledgerless)")
+        return redirect_with_alert("Credential issued to Jane")
     else:
         return redirect_with_alert(f"Error sending credential!\n{response.text}")
+
+@app.route("/init_schema", methods=["POST"])
+def init_schema():
+    schema_name = f"MyTestSchema_{uuid.uuid4().hex[:6]}"
+    schema_version = "1.0"
+
+    # check if schema exists
+    existing = requests.get(f"http://john:8031/schemas/created?schema_name={schema_name}&schema_version={schema_version}").json()
+
+    if existing.get("schema_ids"):
+        schema_id = existing["schema_ids"][-1]  # use the most recent
+    else:
+        # create schema if not exists
+        schema = {
+            "schema_name": schema_name,
+            "schema_version": schema_version,
+            "attributes": ["name", "role"]
+        }
+        response = requests.post("http://john:8031/schemas", json=schema)
+        if response.status_code != 200:
+            return redirect_with_alert(f"Schema creation failed: {response.text}")
+        schema_id = response.json().get("schema_id")
+
+    # check existing cred defs for this schema
+    cred_defs = requests.get("http://john:8031/credential-definitions/created").json()
+    for cd_id in cred_defs.get("credential_definition_ids", []):
+        if schema_id in cd_id:
+            # if already exists, save it and skip creation
+            with open("cred_def.txt", "w") as f:
+                f.write(json.dumps({"cred_def_id": cd_id}))
+            return redirect_with_alert("Existing credential definition reused.")
+
+    # create new credential definition
+    cred_def = {
+        "schema_id": schema_id,
+        "support_revocation": False,
+        "tag": f"tag_{uuid.uuid4().hex[:4]}"
+    }
+
+    cred_def_response = requests.post("http://john:8031/credential-definitions", json=cred_def)
+    if cred_def_response.status_code != 200:
+        return redirect_with_alert(f"Credential definition failed: {cred_def_response.text}")
+
+    with open("cred_def.txt", "w") as f:
+        f.write(json.dumps(cred_def_response.json()))
+
+    return redirect_with_alert("Schema and credential definition ready on ledger.")
 
 @app.route('/subscribe', methods=['POST'])
 def subscribe_form():
@@ -102,27 +155,6 @@ def subscribe_form():
         f = open("agents.txt", "a")
         return redirect("/")
     return "Hiányzó adat", 400
-
-@app.route("/init_schema", methods=["POST"])
-def init_schema():
-    schema = {
-        "schema_name": "MyTestSchema",
-        "schema_version": "1.0",
-        "attributes": ["name", "role"]
-    }
-
-    cred_def = {
-        "schema": schema,
-        "support_revocation": False
-    }
-
-    with open("cred_def.txt", "w") as f:
-        f.write(json.dumps(cred_def))
-
-    return redirect_with_alert(
-        "Schema and 'credential definition' data saved locally (no-ledger mode)."
-    )
-
 
 @app.route('/webhooks/topic/<topic>/', methods=['POST'])
 def webhook(topic):
