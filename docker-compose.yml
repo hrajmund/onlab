@@ -43,6 +43,7 @@ services:
       --wallet-key janeskey123
       --auto-provision
       --auto-accept-invites
+      --auto-store-credential
       --auto-accept-requests
       --auto-respond-credential-offer
       --auto-respond-credential-request
@@ -79,9 +80,9 @@ services:
       --genesis-url http://test.bcovrin.vonx.io/genesis
       --ledger-pool-name bcovrin-test
       --seed 0000000000000000000000JamesSeed1
-      --endpoint http://james:8023
+      --endpoint http://james:8022
     ports:
-      - "8023:8023"
+      - "8022:8022"
       - "8033:8033"
     depends_on:
       - controller
