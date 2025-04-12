@@ -12,97 +12,65 @@ services:
       - john
       - jane
       - james
-    networks:
-      - vonx-net
-
   john:
-    image: ghcr.io/hyperledger/aries-cloudagent-python:py3.9-0.12.6
+    image: ghcr.io/cheqd/acapy-agent:py3.12-1.1.2-develop.3
     container_name: onlab-John-1
     ports:
       - "8031:8031"
     command: >
-      start
-      --label john
+     start
+      --label issuer
       --inbound-transport http 0.0.0.0 8031
-      --outbound-transport http
-      --admin 0.0.0.0 8030
-      --admin-insecure-mode
-      --endpoint http://john:8031
-      --wallet-type askar
-      --wallet-name john
-      --wallet-key johnkey
-      --genesis-url http://test.bcovrin.vonx.io/genesis
-      --auto-provision
-      --auto-accept-invites
-      --auto-accept-requests
+     --outbound-transport http
+     --admin 0.0.0.0 8030
+     --admin-insecure-mode
+     --endpoint http://john:8031
+     --wallet-type askar
+     --wallet-name issuer
+     --wallet-key issuerkey
+     --genesis-url https://raw.githubusercontent.com/cheqd/cheqd-node/main/networks/testnet/genesis.json
+     --auto-provision
+     --auto-accept-invites
+     --auto-accept-requests
 
   jane:
-    image: ghcr.io/hyperledger/aries-cloudagent-python:py3.9-0.12.6
+    image: ghcr.io/cheqd/acapy-agent:py3.12-1.1.2-develop.3
     container_name: onlab-Jane-1
     ports:
       - "8032:8032"
     command: >
-      start
-      --label jane
+     start
+     --label holder
       --inbound-transport http 0.0.0.0 8033
-      --outbound-transport http
-      --admin 0.0.0.0 8032
-      --admin-insecure-mode
-      --endpoint http://jane:8033
-      --wallet-type askar
-      --wallet-name jane
-      --wallet-key janekey
-      --genesis-url http://test.bcovrin.vonx.io/genesis
-      --auto-provision
-      --auto-accept-invites
+     --outbound-transport http
+     --admin 0.0.0.0 8032
+     --admin-insecure-mode
+     --endpoint http://jane:8033
+     --wallet-type askar
+      --wallet-name holder
+     --wallet-key holderkey
+     --genesis-url https://raw.githubusercontent.com/cheqd/cheqd-node/main/networks/testnet/genesis.json
+     --auto-provision
+     --auto-accept-invites
       --auto-accept-requests
 
   james:
-    image: ghcr.io/hyperledger/aries-cloudagent-python:py3.9-0.12.6
-    container_name: onlab-James-1
-    ports:
+   image: ghcr.io/cheqd/acapy-agent:py3.12-1.1.2-develop.3
+   container_name: onlab-James-1
+   ports:
       - "8034:8034"
-    command: >
-      start
-      --label verifier
-      --inbound-transport http 0.0.0.0 8035
+   command: >
+     start
+     --label verifier
+     --inbound-transport http 0.0.0.0 8035
       --outbound-transport http
-      --admin 0.0.0.0 8034
-      --admin-insecure-mode
-      --endpoint http://verifier:8035
-      --wallet-type askar
-      --wallet-name verifier
-      --wallet-key verifierkey
-      --genesis-url http://test.bcovrin.vonx.io/genesis
-      --auto-provision
-      --auto-accept-invites
-      --auto-accept-requests
-      --multitenant
-      --jwt-secret somesecret
-      --auto-ping-connection
-
-#  cheqd-agent:
-#    image: ghcr.io/hyperledger/aries-cloudagent-python:py3.9-0.12.6
-#    container_name: cheqd-agent
-#    ports:
-#      - "8036:8036"
-#    command: >
-#      start
-#      --label cheqd
-#      --inbound-transport http 0.0.0.0 8037
-#      --outbound-transport http
-#      --admin 0.0.0.0 8036
-#      --admin-insecure-mode
-#      --endpoint http://cheqd-agent:8037
-#      --wallet-type askar
-#      --wallet-name cheqd
-#      --wallet-key cheqdkey
-#      --ledger-type cheqd
-#      --cheqd-ledger-id testnet-cheqd
-#      --cheqd-network testnet
-#      --cheqd-endpoint https://rpc.cheqd.net
-#      --genesis-url https://raw.githubusercontent.com/cheqd/cheqd-node/main/networks/testnet-8/genesis.json
-#      --auto-provision
-
-networks:
-  vonx-net:
+     --admin 0.0.0.0 8034
+     --admin-insecure-mode
+     --endpoint http://james:8035
+     --wallet-type askar
+     --wallet-name verifier
+     --wallet-key verifierkey
+     --genesis-url https://raw.githubusercontent.com/cheqd/cheqd-node/main/networks/testnet/genesis.json
+     --auto-provision
+     --auto-accept-invites
+     --auto-accept-requests
